@@ -1,0 +1,24 @@
+section: cars
+name: Critical Analysis and Reasoning Skills
+foundational_concepts:
+  - code: "CARS-FOUNDATION"
+    name: "MVP foundation"
+    content_categories:
+      - code: "CARS-CAT"
+        name: "MVP content category"
+        topics:
+          - code: "CA.1"
+            name: "Comprehension"
+            subtopics: []
+          - code: "CA.2"
+            name: "Reasoning within the text"
+            subtopics: []
+          - code: "CA.3"
+            name: "Reasoning beyond the text"
+            subtopics: []
+          - code: "CA.4"
+            name: "Author tone"
+            subtopics: []
+          - code: "CA.5"
+            name: "Argument structure"
+            subtopics: []

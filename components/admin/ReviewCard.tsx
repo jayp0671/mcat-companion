@@ -1,0 +1,1 @@
+import { Card, CardContent, CardTitle } from "@/components/ui/card"; export function ReviewCard(){return <Card><CardTitle>Pending question</CardTitle><CardContent>No pending generated questions.</CardContent></Card>}

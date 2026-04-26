@@ -1,0 +1,10 @@
+version: 1.0.0
+purpose: Identify weekly mistake patterns from logged mistakes.
+inputs: [recent_mistakes, mastery_state]
+output_schema:
+  patterns: array
+  summary: string
+guardrails:
+  - Only cite patterns supported by at least three mistakes.
+  - Include evidence question IDs.
+  - Do not fabricate trends.

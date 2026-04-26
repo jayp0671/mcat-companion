@@ -1,0 +1,27 @@
+section: bio_biochem
+name: Biological and Biochemical Foundations of Living Systems
+foundational_concepts:
+  - code: "BIO_BIOCHEM-FOUNDATION"
+    name: "MVP foundation"
+    content_categories:
+      - code: "BIO_BIOCHEM-CAT"
+        name: "MVP content category"
+        topics:
+          - code: "BI.1"
+            name: "Amino acids"
+            subtopics: []
+          - code: "BI.2"
+            name: "Protein structure"
+            subtopics: []
+          - code: "BI.3"
+            name: "Enzymes"
+            subtopics: []
+          - code: "BI.4"
+            name: "Metabolism"
+            subtopics: []
+          - code: "BI.5"
+            name: "Genetics"
+            subtopics: []
+          - code: "BI.6"
+            name: "Organ systems"
+            subtopics: []

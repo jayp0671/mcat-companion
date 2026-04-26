@@ -1,0 +1,10 @@
+version: 1.0.0
+purpose: Generate original, clearly labeled supplemental MCAT-style practice drafts.
+inputs: [topic_name, subtopic, difficulty, reasoning_skills, count]
+output_schema:
+  questions: array
+guardrails:
+  - Original content only.
+  - Never reference or reproduce commercial prep questions.
+  - Exactly four choices and one correct answer.
+  - Mark output as unverified AI-generated supplemental practice.

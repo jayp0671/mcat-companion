@@ -1,0 +1,14 @@
+version: 1.0.0
+purpose: Suggest taxonomy tags for a logged mistake.
+inputs: [question_stem, choices, taxonomy_tree]
+output_schema:
+  section: string|null
+  content_category_id: string|null
+  topic_id: string|null
+  subtopic_id: string|null
+  reasoning_skills: array
+  difficulty: number|null
+  format: discrete|passage|null
+guardrails:
+  - Use only IDs supplied in the taxonomy input.
+  - Return null when uncertain.

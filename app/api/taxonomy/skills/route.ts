@@ -1,19 +1,16 @@
 import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET() {
-  return NextResponse.json({ ok: true, route: "/api/taxonomy/skills", status: "scaffolded" });
-}
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("reasoning_skills")
+    .select("id,code,name,description")
+    .order("code", { ascending: true });
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ ok: true, route: "/api/taxonomy/skills", status: "scaffolded", body });
-}
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
-export async function PATCH(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ ok: true, route: "/api/taxonomy/skills", status: "scaffolded", body });
-}
-
-export async function DELETE() {
-  return NextResponse.json({ ok: true, route: "/api/taxonomy/skills", status: "scaffolded" });
+  return NextResponse.json({ skills: data ?? [] });
 }

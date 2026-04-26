@@ -1,19 +1,31 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export async function GET() {
-  return NextResponse.json({ ok: true, route: "/api/auth/magic-link", status: "scaffolded" });
-}
+const magicLinkSchema = z.object({
+  email: z.string().email(),
+});
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ ok: true, route: "/api/auth/magic-link", status: "scaffolded", body });
-}
+export async function POST(request: NextRequest) {
+  const json = await request.json().catch(() => null);
+  const parsed = magicLinkSchema.safeParse(json);
 
-export async function PATCH(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ ok: true, route: "/api/auth/magic-link", status: "scaffolded", body });
-}
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
+  }
 
-export async function DELETE() {
-  return NextResponse.json({ ok: true, route: "/api/auth/magic-link", status: "scaffolded" });
+  const origin = request.nextUrl.origin;
+  const supabase = createSupabaseServerClient();
+  const { error } = await supabase.auth.signInWithOtp({
+    email: parsed.data.email,
+    options: {
+      emailRedirectTo: `${origin}/auth-callback`,
+    },
+  });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

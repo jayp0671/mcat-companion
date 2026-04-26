@@ -1,27 +1,7 @@
 section: psych_soc
-name: Psychological, Social, and Biological Foundations of Behavior
-foundational_concepts:
-  - code: "PSYCH_SOC-FOUNDATION"
-    name: "MVP foundation"
-    content_categories:
-      - code: "PSYCH_SOC-CAT"
-        name: "MVP content category"
-        topics:
-          - code: "PS.1"
-            name: "Learning and memory"
-            subtopics: []
-          - code: "PS.2"
-            name: "Sensation and perception"
-            subtopics: []
-          - code: "PS.3"
-            name: "Identity and self"
-            subtopics: []
-          - code: "PS.4"
-            name: "Social processes"
-            subtopics: []
-          - code: "PS.5"
-            name: "Research methods"
-            subtopics: []
-          - code: "PS.6"
-            name: "Demographics"
-            subtopics: []
+name: Psychological, Social, and Biological Foundations
+status: phase_2_seed
+topics:
+  - Learning and memory
+  - Social processes and behavior
+  - Demographics and social stratification

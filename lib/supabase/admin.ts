@@ -1,8 +1,18 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { env } from "@/lib/config";
+
+function requiredEnv(name: string, value: string | undefined): string {
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
 
 export function createAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Missing Supabase admin env vars");
-  return createSupabaseClient(url, key, { auth: { persistSession: false } });
+  return createSupabaseClient(
+    requiredEnv("NEXT_PUBLIC_SUPABASE_URL", env.NEXT_PUBLIC_SUPABASE_URL),
+    requiredEnv("SUPABASE_SERVICE_ROLE_KEY", env.SUPABASE_SERVICE_ROLE_KEY),
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
 }

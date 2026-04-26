@@ -1,19 +1,33 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { bulkMistakePreviewSchema } from "@/lib/mistakes/validators";
 
-export async function GET() {
-  return NextResponse.json({ ok: true, route: "/api/mistakes/bulk", status: "scaffolded" });
-}
+export async function POST(request: NextRequest) {
+  const json = await request.json();
+  const parsed = bulkMistakePreviewSchema.safeParse(json);
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ ok: true, route: "/api/mistakes/bulk", status: "scaffolded", body });
-}
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Paste text is required.", issues: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
 
-export async function PATCH(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ ok: true, route: "/api/mistakes/bulk", status: "scaffolded", body });
-}
+  const lines = parsed.data.raw_text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-export async function DELETE() {
-  return NextResponse.json({ ok: true, route: "/api/mistakes/bulk", status: "scaffolded" });
+  const previews = lines.map((line, index) => ({
+    id: `preview-${index + 1}`,
+    raw: line,
+    suggested_source_material: "",
+    suggested_stem: line,
+    needs_review: true,
+  }));
+
+  return NextResponse.json({
+    previews,
+    message:
+      "Bulk parsing is intentionally conservative for Phase 3. Review each preview before saving.",
+  });
 }

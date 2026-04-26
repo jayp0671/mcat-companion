@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { formatDifficulty, formatSection } from "@/lib/utils/sections";
+import { ExplainButton } from "@/components/mistakes/ExplainButton";
 
 type MistakeDetailProps = {
   mistake: any;
@@ -96,6 +97,8 @@ export function MistakeDetail({ mistake }: MistakeDetailProps) {
           </div>
         </dl>
       </div>
+
+      <ExplainButton id={mistake.id} initialExplanation={question?.explanation ?? null} />
 
       {mistake.notes ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

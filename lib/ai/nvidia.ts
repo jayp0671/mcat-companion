@@ -9,7 +9,17 @@ import type {
   PlanInput,
   QuestionGenInput,
 } from "./types";
-import { explanationSchema } from "./validators";
+import {
+  classificationSchema,
+  diagnosisReportSchema,
+  draftQuestionsSchema,
+  explanationSchema,
+  planNarrativeSchema,
+} from "./validators";
+
+function safeJson(text: string) {
+  try { return JSON.parse(text); } catch { return {}; }
+}
 
 export class NvidiaProvider implements LLMProvider {
   private readonly client = env.NVIDIA_API_KEY
@@ -18,43 +28,63 @@ export class NvidiaProvider implements LLMProvider {
 
   private readonly mock = new MockProvider();
 
-  async generateExplanation(input?: ExplanationInput) {
-    if (!this.client) return this.mock.generateExplanation(input);
-
+  private async jsonCall(system: string, input: unknown) {
+    if (!this.client) return null;
     const response = await this.client.chat.completions.create({
       model: env.NVIDIA_MODEL,
       temperature: 0.3,
       response_format: { type: "json_object" },
       messages: [
-        {
-          role: "system",
-          content:
-            "You are an MCAT explanation assistant. Return only valid JSON matching the requested schema.",
-        },
-        {
-          role: "user",
-          content: JSON.stringify(input),
-        },
+        { role: "system", content: system },
+        { role: "user", content: JSON.stringify(input) },
       ],
     });
+    return safeJson(response.choices[0]?.message?.content ?? "{}");
+  }
 
-    const text = response.choices[0]?.message?.content ?? "{}";
-    return explanationSchema.parse(JSON.parse(text));
+  async generateExplanation(input?: ExplanationInput) {
+    const data = await this.jsonCall(
+      "You are an MCAT tutor. Return only JSON with correct_explanation, distractor_explanations, key_concept, and common_misconception. Keep explanations concise and cross-checkable.",
+      input,
+    );
+    if (!data) return this.mock.generateExplanation(input);
+    return explanationSchema.parse(data);
   }
 
   async generateQuestion(input?: QuestionGenInput) {
-    return this.mock.generateQuestion(input);
+    const data = await this.jsonCall(
+      "Generate original, AI-labeled MCAT-style multiple choice practice. Return JSON array of draft questions or {questions:[...]}. Do not copy commercial prep material.",
+      input,
+    );
+    if (!data) return this.mock.generateQuestion(input);
+    const asArray = Array.isArray(data) ? data : (Array.isArray((data as any).questions) ? (data as any).questions : []);
+    return draftQuestionsSchema.parse(asArray);
   }
 
   async classifyQuestion(input?: ClassifyInput) {
-    return this.mock.classifyQuestion(input);
+    const data = await this.jsonCall(
+      "Classify an MCAT question. Return JSON with section, content_category_id, topic_id, subtopic_id, reasoning_skills, difficulty, and format. Use null when unsure.",
+      input,
+    );
+    if (!data) return this.mock.classifyQuestion(input);
+    return classificationSchema.parse(data);
   }
 
   async diagnoseMistakes(input?: DiagnoseInput) {
-    return this.mock.diagnoseMistakes(input);
+    const data = await this.jsonCall(
+      "Analyze MCAT mistake patterns. Only cite patterns supported by evidence. Return JSON with patterns and summary.",
+      input,
+    );
+    if (!data) return this.mock.diagnoseMistakes(input);
+    return diagnosisReportSchema.parse(data);
   }
 
   async generatePlanNarrative(input?: PlanInput) {
-    return this.mock.generatePlanNarrative(input);
+    const data = await this.jsonCall(
+      "Turn a deterministic MCAT study plan into a concise student-facing JSON narrative. Do not change block durations or topic IDs.",
+      input,
+    );
+    if (!data) return this.mock.generatePlanNarrative(input);
+    return planNarrativeSchema.parse(data);
   }
 }

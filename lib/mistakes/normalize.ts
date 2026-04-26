@@ -28,6 +28,9 @@ function normalizeQuestion(question: unknown) {
     ),
     topic: firstOrNull(normalized.topic as MaybeArray<Record<string, unknown>>),
     subtopic: firstOrNull(normalized.subtopic as MaybeArray<Record<string, unknown>>),
+    explanation: firstOrNull(normalized.explanation as MaybeArray<Record<string, unknown>>),
+    choices: Array.isArray(normalized.choices) ? normalized.choices : [],
+    skills: Array.isArray(normalized.skills) ? normalized.skills : [],
   };
 }
 

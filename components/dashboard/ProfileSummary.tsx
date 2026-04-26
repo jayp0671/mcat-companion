@@ -1,20 +1,30 @@
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-
 type ProfileSummaryProps = {
-  displayName: string | null;
-  targetScore: number | null;
-  hoursPerWeek: number | null;
+  profile: {
+    target_score: number | null;
+    hours_per_week: number | null;
+  };
+  mistakeCount?: number;
 };
 
-export function ProfileSummary({ displayName, targetScore, hoursPerWeek }: ProfileSummaryProps) {
+export function ProfileSummary({ profile, mistakeCount = 0 }: ProfileSummaryProps) {
   return (
-    <Card>
-      <CardTitle>Prep profile</CardTitle>
-      <CardContent className="mt-4 space-y-2 text-sm text-slate-600">
-        <p><span className="font-medium text-slate-950">Student:</span> {displayName ?? "Not set"}</p>
-        <p><span className="font-medium text-slate-950">Target score:</span> {targetScore ?? "Not set"}</p>
-        <p><span className="font-medium text-slate-950">Weekly hours:</span> {hoursPerWeek ?? "Not set"}</p>
-      </CardContent>
-    </Card>
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm font-semibold text-slate-500">Study profile</p>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Target</p>
+          <p className="mt-1 text-2xl font-bold text-slate-950">
+            {profile.target_score ?? "Set"}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-slate-500">Hours/wk</p>
+          <p className="mt-1 text-2xl font-bold text-slate-950">
+            {profile.hours_per_week ?? 0}
+          </p>
+        </div>
+      </div>
+      <p className="mt-4 text-sm text-slate-500">{mistakeCount} recent mistakes loaded.</p>
+    </div>
   );
 }

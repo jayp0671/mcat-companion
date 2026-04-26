@@ -44,7 +44,8 @@ export default async function MistakeDetailPage({ params }: PageProps) {
         topic:taxonomy_nodes!questions_topic_id_fkey(id, name, code),
         subtopic:taxonomy_nodes!questions_subtopic_id_fkey(id, name, code),
         choices:question_choices(id, label, text, is_correct, position),
-        skills:question_skills(skill:reasoning_skills(id, code, name))
+        skills:question_skills(skill:reasoning_skills(id, code, name)),
+        explanation:question_explanations(*)
       )
     `,
     )

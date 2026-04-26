@@ -1,19 +1,20 @@
 import { NextResponse } from "next/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET() {
-  return NextResponse.json({ ok: true, route: "/api/plan", status: "scaffolded" });
-}
+  const supabase = createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ ok: true, route: "/api/plan", status: "scaffolded", body });
-}
+  const { data, error } = await supabase
+    .from("study_plans")
+    .select("*")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .order("generated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-export async function PATCH(request: Request) {
-  const body = await request.json().catch(() => ({}));
-  return NextResponse.json({ ok: true, route: "/api/plan", status: "scaffolded", body });
-}
-
-export async function DELETE() {
-  return NextResponse.json({ ok: true, route: "/api/plan", status: "scaffolded" });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ plan: data });
 }

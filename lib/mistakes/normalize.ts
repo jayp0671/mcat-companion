@@ -1,31 +1,69 @@
 import type { MistakeListItem } from "@/lib/mistakes/types";
+import type { DashboardMistakeRow } from "@/lib/services/dashboard";
 
-function firstOrNull<T>(value: T | T[] | null | undefined): T | null {
-  if (Array.isArray(value)) return value[0] ?? null;
+type MaybeArray<T> = T | T[] | null | undefined;
+
+function firstOrNull<T>(value: MaybeArray<T>): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
   return value ?? null;
 }
 
-function normalizeQuestion(question: any): MistakeListItem["question"] {
-  const q = firstOrNull(question);
-  if (!q) return null;
+function normalizeQuestion(question: unknown) {
+  const normalized = firstOrNull(question as MaybeArray<Record<string, unknown>>);
+
+  if (!normalized) {
+    return null;
+  }
 
   return {
-    ...q,
-    content_category: firstOrNull(q.content_category),
-    topic: firstOrNull(q.topic),
-    subtopic: firstOrNull(q.subtopic),
-    choices: Array.isArray(q.choices) ? q.choices : q.choices ? [q.choices] : undefined,
-    skills: Array.isArray(q.skills) ? q.skills : q.skills ? [q.skills] : undefined,
-  } as MistakeListItem["question"];
+    ...normalized,
+    content_category: firstOrNull(
+      (normalized.content_category ?? normalized.category) as MaybeArray<Record<string, unknown>>,
+    ),
+    category: firstOrNull(
+      (normalized.category ?? normalized.content_category) as MaybeArray<Record<string, unknown>>,
+    ),
+    topic: firstOrNull(normalized.topic as MaybeArray<Record<string, unknown>>),
+    subtopic: firstOrNull(normalized.subtopic as MaybeArray<Record<string, unknown>>),
+  };
 }
 
-export function normalizeMistakeListItem(row: any): MistakeListItem {
+export function normalizeMistakeRow<T extends { question?: unknown }>(row: T) {
   return {
     ...row,
-    question: normalizeQuestion(row?.question),
-  } as MistakeListItem;
+    question: normalizeQuestion(row.question),
+  };
 }
 
-export function normalizeMistakeListItems(rows: any[] | null | undefined): MistakeListItem[] {
-  return (rows ?? []).map(normalizeMistakeListItem);
+export function normalizeMistakeRows<T extends { question?: unknown }>(
+  rows: T[] | null | undefined,
+) {
+  return (rows ?? []).map((row) => normalizeMistakeRow(row));
+}
+
+export function normalizeDashboardMistakeRows(
+  rows: unknown[] | null | undefined,
+): DashboardMistakeRow[] {
+  return (rows ?? []).map((row) => 
+    normalizeMistakeRow(row as { question?: unknown })
+  ) as unknown as DashboardMistakeRow[];
+}
+
+export function normalizeMistakeListItem<T extends { question?: unknown }>(
+  row: T | null | undefined,
+): MistakeListItem | null {
+  if (!row) {
+    return null;
+  }
+
+  return normalizeMistakeRow(row) as unknown as MistakeListItem;
+}
+
+export function normalizeMistakeListItems<T extends { question?: unknown }>(
+  rows: T[] | null | undefined,
+): MistakeListItem[] {
+  return normalizeMistakeRows(rows) as unknown as MistakeListItem[];
 }

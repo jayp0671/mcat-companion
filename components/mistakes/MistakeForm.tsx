@@ -1,526 +1,554 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
-type TaxonomyNode = {
-  id: string;
-  parent_id: string | null;
-  level: "section" | "foundation" | "category" | "topic" | "subtopic";
-  code: string | null;
-  name: string;
-  section: string | null;
-};
+import { useRouter } from "next/navigation";
+import type { ReasoningSkill, TaxonomyNode } from "@/lib/mistakes/types";
+import { formatSection } from "@/lib/utils/sections";
 
 type MistakeFormProps = {
-  taxonomy?: TaxonomyNode[] | null;
+  taxonomyNodes?: TaxonomyNode[];
+  taxonomy?: TaxonomyNode[];
+  reasoningSkills?: ReasoningSkill[];
 };
 
-type MistakeFormState = {
+type ChoiceDraft = {
+  label: "A" | "B" | "C" | "D";
+  text: string;
+};
+
+type DraftShape = {
   stem: string;
   passage: string;
+  sourceMaterial: string;
   section: string;
+  contentCategoryId: string;
+  topicId: string;
+  subtopicId: string;
   format: "discrete" | "passage";
-  source_material: string;
-  difficulty: string;
-  content_category_id: string;
-  topic_id: string;
-  subtopic_id: string;
-  her_selected_answer: string;
-  correct_answer: string;
-  her_confidence: string;
-  time_spent_seconds: string;
+  difficulty: number;
+  selectedAnswer: string;
+  correctAnswer: string;
+  confidence: string;
+  timeSpent: string;
   notes: string;
+  choices: ChoiceDraft[];
+  skillIds: string[];
 };
 
-const DRAFT_KEY = "mcat-companion-mistake-draft";
+const STORAGE_KEY = "mcat-companion:mistake-draft:v1";
 
-const initialForm: MistakeFormState = {
-  stem: "",
-  passage: "",
-  section: "bio_biochem",
-  format: "discrete",
-  source_material: "",
-  difficulty: "3",
-  content_category_id: "",
-  topic_id: "",
-  subtopic_id: "",
-  her_selected_answer: "",
-  correct_answer: "",
-  her_confidence: "3",
-  time_spent_seconds: "",
-  notes: "",
-};
+const EMPTY_CHOICES: ChoiceDraft[] = [
+  { label: "A", text: "" },
+  { label: "B", text: "" },
+  { label: "C", text: "" },
+  { label: "D", text: "" },
+];
 
-const sectionLabels: Record<string, string> = {
-  chem_phys: "Chem/Phys",
-  cars: "CARS",
-  bio_biochem: "Bio/Biochem",
-  psych_soc: "Psych/Soc",
-};
+const FALLBACK_SECTIONS = [
+  { value: "chem_phys", label: "Chem/Phys" },
+  { value: "cars", label: "CARS" },
+  { value: "bio_biochem", label: "Bio/Biochem" },
+  { value: "psych_soc", label: "Psych/Soc" },
+];
 
-function coerceNumber(value: string, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
+export function MistakeForm({
+  taxonomyNodes,
+  taxonomy,
+  reasoningSkills,
+}: MistakeFormProps) {
+  const router = useRouter();
+  const safeTaxonomyNodes = taxonomyNodes ?? taxonomy ?? [];
+  const safeReasoningSkills = reasoningSkills ?? [];
 
-export function MistakeForm({ taxonomy }: MistakeFormProps) {
-  const taxonomyNodes = Array.isArray(taxonomy) ? taxonomy : [];
-
-  const [form, setForm] = useState<MistakeFormState>(initialForm);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [stem, setStem] = useState("");
+  const [passage, setPassage] = useState("");
+  const [sourceMaterial, setSourceMaterial] = useState("");
+  const [section, setSection] = useState("bio_biochem");
+  const [contentCategoryId, setContentCategoryId] = useState("");
+  const [topicId, setTopicId] = useState("");
+  const [subtopicId, setSubtopicId] = useState("");
+  const [format, setFormat] = useState<"discrete" | "passage">("discrete");
+  const [difficulty, setDifficulty] = useState(3);
+  const [selectedAnswer, setSelectedAnswer] = useState("");
+  const [correctAnswer, setCorrectAnswer] = useState("");
+  const [confidence, setConfidence] = useState("");
+  const [timeSpent, setTimeSpent] = useState("");
+  const [notes, setNotes] = useState("");
+  const [choices, setChoices] = useState<ChoiceDraft[]>(EMPTY_CHOICES);
+  const [skillIds, setSkillIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const sections = useMemo(
+    () => safeTaxonomyNodes.filter((node) => node.level === "section"),
+    [safeTaxonomyNodes],
+  );
+
+  const categories = useMemo(
+    () =>
+      safeTaxonomyNodes.filter(
+        (node) => node.level === "category" && node.section === section,
+      ),
+    [safeTaxonomyNodes, section],
+  );
+
+  const topics = useMemo(
+    () =>
+      safeTaxonomyNodes.filter(
+        (node) => node.level === "topic" && node.parent_id === contentCategoryId,
+      ),
+    [safeTaxonomyNodes, contentCategoryId],
+  );
+
+  const subtopics = useMemo(
+    () =>
+      safeTaxonomyNodes.filter(
+        (node) => node.level === "subtopic" && node.parent_id === topicId,
+      ),
+    [safeTaxonomyNodes, topicId],
+  );
 
   useEffect(() => {
-    const savedDraft = window.localStorage.getItem(DRAFT_KEY);
-
-    if (!savedDraft) {
-      return;
-    }
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (!saved) return;
 
     try {
-      const parsed = JSON.parse(savedDraft) as Partial<MistakeFormState>;
-      setForm((current) => ({
-        ...current,
-        ...parsed,
-      }));
+      const draft = JSON.parse(saved) as Partial<DraftShape>;
+
+      setStem(draft.stem ?? "");
+      setPassage(draft.passage ?? "");
+      setSourceMaterial(draft.sourceMaterial ?? "");
+      setSection(draft.section ?? "bio_biochem");
+      setContentCategoryId(draft.contentCategoryId ?? "");
+      setTopicId(draft.topicId ?? "");
+      setSubtopicId(draft.subtopicId ?? "");
+      setFormat(draft.format ?? "discrete");
+      setDifficulty(draft.difficulty ?? 3);
+      setSelectedAnswer(draft.selectedAnswer ?? "");
+      setCorrectAnswer(draft.correctAnswer ?? "");
+      setConfidence(draft.confidence ?? "");
+      setTimeSpent(draft.timeSpent ?? "");
+      setNotes(draft.notes ?? "");
+      setChoices(draft.choices ?? EMPTY_CHOICES);
+      setSkillIds(draft.skillIds ?? []);
+      setMessage("Recovered your unsaved draft.");
     } catch {
-      window.localStorage.removeItem(DRAFT_KEY);
+      window.localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
 
   useEffect(() => {
+    const draft: DraftShape = {
+      stem,
+      passage,
+      sourceMaterial,
+      section,
+      contentCategoryId,
+      topicId,
+      subtopicId,
+      format,
+      difficulty,
+      selectedAnswer,
+      correctAnswer,
+      confidence,
+      timeSpent,
+      notes,
+      choices,
+      skillIds,
+    };
+
     const timeout = window.setTimeout(() => {
-      window.localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
     }, 500);
 
     return () => window.clearTimeout(timeout);
-  }, [form]);
+  }, [
+    stem,
+    passage,
+    sourceMaterial,
+    section,
+    contentCategoryId,
+    topicId,
+    subtopicId,
+    format,
+    difficulty,
+    selectedAnswer,
+    correctAnswer,
+    confidence,
+    timeSpent,
+    notes,
+    choices,
+    skillIds,
+  ]);
 
-  const categories = useMemo(() => {
-    return taxonomyNodes.filter(
-      (node) => node.level === "category" && node.section === form.section,
-    );
-  }, [taxonomyNodes, form.section]);
-
-  const topics = useMemo(() => {
-    if (!form.content_category_id) {
-      return [];
-    }
-
-    return taxonomyNodes.filter(
-      (node) =>
-        node.level === "topic" && node.parent_id === form.content_category_id,
-    );
-  }, [taxonomyNodes, form.content_category_id]);
-
-  const subtopics = useMemo(() => {
-    if (!form.topic_id) {
-      return [];
-    }
-
-    return taxonomyNodes.filter(
-      (node) => node.level === "subtopic" && node.parent_id === form.topic_id,
-    );
-  }, [taxonomyNodes, form.topic_id]);
-
-  function updateField<K extends keyof MistakeFormState>(
-    key: K,
-    value: MistakeFormState[K],
-  ) {
-    setForm((current) => {
-      const next = {
-        ...current,
-        [key]: value,
-      };
-
-      if (key === "section") {
-        next.content_category_id = "";
-        next.topic_id = "";
-        next.subtopic_id = "";
-      }
-
-      if (key === "content_category_id") {
-        next.topic_id = "";
-        next.subtopic_id = "";
-      }
-
-      if (key === "topic_id") {
-        next.subtopic_id = "";
-      }
-
-      return next;
-    });
+  function resetForm() {
+    setStem("");
+    setPassage("");
+    setSourceMaterial("");
+    setContentCategoryId("");
+    setTopicId("");
+    setSubtopicId("");
+    setFormat("discrete");
+    setDifficulty(3);
+    setSelectedAnswer("");
+    setCorrectAnswer("");
+    setConfidence("");
+    setTimeSpent("");
+    setNotes("");
+    setChoices(EMPTY_CHOICES);
+    setSkillIds([]);
+    window.localStorage.removeItem(STORAGE_KEY);
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setSuccess(null);
+  async function submit(saveAndAnother: boolean) {
     setIsSubmitting(true);
+    setMessage(null);
 
-    const payload = {
-      stem: form.stem.trim(),
-      passage: form.passage.trim() || null,
-      section: form.section,
-      format: form.format,
-      source_material: form.source_material.trim() || null,
-      difficulty: coerceNumber(form.difficulty, 3),
-      content_category_id: form.content_category_id || null,
-      topic_id: form.topic_id || null,
-      subtopic_id: form.subtopic_id || null,
-      her_selected_answer: form.her_selected_answer.trim(),
-      correct_answer: form.correct_answer.trim(),
-      her_confidence: coerceNumber(form.her_confidence, 3),
-      time_spent_seconds: form.time_spent_seconds
-        ? coerceNumber(form.time_spent_seconds, 0)
-        : null,
-      notes: form.notes.trim() || null,
-    };
+    const trimmedStem = stem.trim();
+    const trimmedSelectedAnswer = selectedAnswer.trim();
+    const trimmedCorrectAnswer = correctAnswer.trim();
 
-    if (!payload.stem || !payload.her_selected_answer || !payload.correct_answer) {
-      setError("Question stem, your answer, and correct answer are required.");
+    if (!trimmedStem || !trimmedSelectedAnswer || !trimmedCorrectAnswer) {
       setIsSubmitting(false);
+      setMessage("Question stem, your answer, and correct answer are required.");
       return;
     }
 
     try {
       const response = await fetch("/api/mistakes", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stem: trimmedStem,
+          passage: passage.trim() || null,
+          source_material: sourceMaterial.trim() || null,
+          section,
+          content_category_id: contentCategoryId || null,
+          topic_id: topicId || null,
+          subtopic_id: subtopicId || null,
+          reasoning_skill_ids: skillIds,
+          format,
+          difficulty,
+          her_selected_answer: trimmedSelectedAnswer,
+          correct_answer: trimmedCorrectAnswer,
+          her_confidence: confidence ? Number(confidence) : null,
+          time_spent_seconds: timeSpent ? Number(timeSpent) : null,
+          notes: notes.trim() || null,
+          choices: choices.filter((choice) => choice.text.trim().length > 0),
+        }),
       });
 
-      const result = await response.json().catch(() => null);
+      const payload = await response.json().catch(() => null);
 
       if (!response.ok) {
-        console.error("Mistake save failed:", result);
-        setError(result?.error ?? "Failed to save mistake.");
+        setMessage(payload?.error ?? "Could not save the mistake.");
         return;
       }
 
-      window.localStorage.removeItem(DRAFT_KEY);
-      setForm(initialForm);
-      setSuccess("Mistake saved.");
-      window.location.href = "/log";
-    } catch (err) {
-      console.error("Mistake save error:", err);
-      setError("Something went wrong while saving the mistake.");
+      resetForm();
+
+      if (saveAndAnother) {
+        setMessage("Mistake saved. Ready for the next one.");
+        return;
+      }
+
+      const nextId = payload?.log_entry?.id ?? payload?.mistake?.id;
+      router.push(nextId ? `/mistakes/${nextId}` : "/log");
+    } catch (error) {
+      console.error("Mistake save error", error);
+      setMessage("Something went wrong while saving the mistake.");
     } finally {
       setIsSubmitting(false);
     }
   }
 
+  function toggleSkill(skillId: string) {
+    setSkillIds((current) =>
+      current.includes(skillId)
+        ? current.filter((id) => id !== skillId)
+        : [...current, skillId],
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+    <div className="space-y-6">
+      {message ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
+          {message}
         </div>
       ) : null}
 
-      {success ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {success}
-        </div>
-      ) : null}
-
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-slate-950">
-            Question details
-          </h2>
-          <p className="text-sm text-slate-500">
-            Log the question she missed from real prep materials.
-          </p>
-        </div>
-
-        <div className="space-y-4">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Question stem
-            </span>
-            <textarea
-              value={form.stem}
-              onChange={(event) => updateField("stem", event.target.value)}
-              rows={5}
-              required
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-              placeholder="Paste or type the question stem here."
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Passage context, optional
-            </span>
-            <textarea
-              value={form.passage}
-              onChange={(event) => updateField("passage", event.target.value)}
-              rows={3}
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-              placeholder="Optional passage notes or context."
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Source material
-            </span>
-            <input
-              value={form.source_material}
-              onChange={(event) =>
-                updateField("source_material", event.target.value)
-              }
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-              placeholder="Example: UWorld, AAMC FL1 #23, Anki"
-            />
-          </label>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-slate-950">
-            Classification
-          </h2>
-          <p className="text-sm text-slate-500">
-            These tags power the dashboard and future recommendations.
-          </p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Section</span>
-            <select
-              value={form.section}
-              onChange={(event) => updateField("section", event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-            >
-              {Object.entries(sectionLabels).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Format</span>
-            <select
-              value={form.format}
-              onChange={(event) =>
-                updateField(
-                  "format",
-                  event.target.value as MistakeFormState["format"],
-                )
-              }
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-            >
-              <option value="discrete">Discrete</option>
-              <option value="passage">Passage-based</option>
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Content category
-            </span>
-            <select
-              value={form.content_category_id}
-              onChange={(event) =>
-                updateField("content_category_id", event.target.value)
-              }
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-            >
-              <option value="">Select a category</option>
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.code ? `${category.code} · ` : ""}
-                  {category.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Topic</span>
-            <select
-              value={form.topic_id}
-              onChange={(event) => updateField("topic_id", event.target.value)}
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-            >
-              <option value="">Select a topic</option>
-              {topics.map((topic) => (
-                <option key={topic.id} value={topic.id}>
-                  {topic.code ? `${topic.code} · ` : ""}
-                  {topic.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Subtopic, optional
-            </span>
-            <select
-              value={form.subtopic_id}
-              onChange={(event) =>
-                updateField("subtopic_id", event.target.value)
-              }
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-            >
-              <option value="">Select a subtopic</option>
-              {subtopics.map((subtopic) => (
-                <option key={subtopic.id} value={subtopic.id}>
-                  {subtopic.code ? `${subtopic.code} · ` : ""}
-                  {subtopic.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Difficulty
-            </span>
-            <select
-              value={form.difficulty}
-              onChange={(event) =>
-                updateField("difficulty", event.target.value)
-              }
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-            >
-              <option value="1">1 · Easy</option>
-              <option value="2">2</option>
-              <option value="3">3 · Medium</option>
-              <option value="4">4</option>
-              <option value="5">5 · Hard</option>
-            </select>
-          </label>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-slate-950">
-            Answer review
-          </h2>
-          <p className="text-sm text-slate-500">
-            Record what she picked and what the correct answer was.
-          </p>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Her selected answer
-            </span>
-            <input
-              value={form.her_selected_answer}
-              onChange={(event) =>
-                updateField("her_selected_answer", event.target.value)
-              }
-              required
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-              placeholder="Example: A"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Correct answer
-            </span>
-            <input
-              value={form.correct_answer}
-              onChange={(event) =>
-                updateField("correct_answer", event.target.value)
-              }
-              required
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-              placeholder="Example: B"
-            />
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Confidence
-            </span>
-            <select
-              value={form.her_confidence}
-              onChange={(event) =>
-                updateField("her_confidence", event.target.value)
-              }
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-            >
-              <option value="1">1 · Guessed</option>
-              <option value="2">2</option>
-              <option value="3">3 · Unsure</option>
-              <option value="4">4</option>
-              <option value="5">5 · Felt confident</option>
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">
-              Time spent, optional
-            </span>
-            <input
-              type="number"
-              min="0"
-              value={form.time_spent_seconds}
-              onChange={(event) =>
-                updateField("time_spent_seconds", event.target.value)
-              }
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-              placeholder="Seconds"
-            />
-          </label>
-        </div>
-
-        <label className="mt-4 block">
-          <span className="text-sm font-medium text-slate-700">Notes</span>
-          <textarea
-            value={form.notes}
-            onChange={(event) => updateField("notes", event.target.value)}
-            rows={3}
-            className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
-            placeholder="Why did she miss it? Content gap, graph issue, careless mistake, etc."
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Source</span>
+          <input
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            placeholder="AAMC FL1 #23, UWorld Bio QID, Anki, etc."
+            value={sourceMaterial}
+            onChange={(event) => setSourceMaterial(event.target.value)}
           />
         </label>
-      </section>
 
-      <div className="sticky bottom-0 -mx-4 border-t bg-white/95 px-4 py-4 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:px-0">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-slate-500">
-            Draft saves automatically in this browser.
-          </p>
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Section</span>
+          <select
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            value={section}
+            onChange={(event) => {
+              setSection(event.target.value);
+              setContentCategoryId("");
+              setTopicId("");
+              setSubtopicId("");
+            }}
+          >
+            {sections.map((node) => (
+              <option key={node.id} value={node.section ?? node.code ?? node.id}>
+                {node.name || formatSection(node.section)}
+              </option>
+            ))}
+            {sections.length === 0
+              ? FALLBACK_SECTIONS.map((fallback) => (
+                  <option key={fallback.value} value={fallback.value}>
+                    {fallback.label}
+                  </option>
+                ))
+              : null}
+          </select>
+        </label>
+      </div>
 
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setForm(initialForm);
-                window.localStorage.removeItem(DRAFT_KEY);
-              }}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Clear
-            </button>
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-slate-700">Question stem</span>
+        <textarea
+          className="min-h-36 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+          placeholder="Paste or type the missed question stem. Keep this private and use it only for personal study."
+          value={stem}
+          onChange={(event) => setStem(event.target.value)}
+        />
+      </label>
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="rounded-xl bg-slate-950 px-5 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isSubmitting ? "Saving..." : "Save mistake"}
-            </button>
-          </div>
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-slate-700">Passage context optional</span>
+        <textarea
+          className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+          placeholder="Only add what you need to understand the mistake later."
+          value={passage}
+          onChange={(event) => setPassage(event.target.value)}
+        />
+      </label>
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Content category</span>
+          <select
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            value={contentCategoryId}
+            onChange={(event) => {
+              setContentCategoryId(event.target.value);
+              setTopicId("");
+              setSubtopicId("");
+            }}
+          >
+            <option value="">Select category</option>
+            {categories.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.code ? `${node.code} - ` : ""}
+                {node.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Topic</span>
+          <select
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            value={topicId}
+            onChange={(event) => {
+              setTopicId(event.target.value);
+              setSubtopicId("");
+            }}
+            disabled={!contentCategoryId}
+          >
+            <option value="">Select topic</option>
+            {topics.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.code ? `${node.code} - ` : ""}
+                {node.name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Subtopic optional</span>
+          <select
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            value={subtopicId}
+            onChange={(event) => setSubtopicId(event.target.value)}
+            disabled={!topicId}
+          >
+            <option value="">Select subtopic</option>
+            {subtopics.map((node) => (
+              <option key={node.id} value={node.id}>
+                {node.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Format</span>
+          <select
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            value={format}
+            onChange={(event) => setFormat(event.target.value as "discrete" | "passage")}
+          >
+            <option value="discrete">Discrete</option>
+            <option value="passage">Passage-based</option>
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Difficulty</span>
+          <select
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            value={difficulty}
+            onChange={(event) => setDifficulty(Number(event.target.value))}
+          >
+            {[1, 2, 3, 4, 5].map((value) => (
+              <option key={value} value={value}>
+                {value}/5
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Your answer</span>
+          <input
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            placeholder="A, B, C, D, or text"
+            value={selectedAnswer}
+            onChange={(event) => setSelectedAnswer(event.target.value.toUpperCase())}
+          />
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Correct answer</span>
+          <input
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            placeholder="A, B, C, D, or text"
+            value={correctAnswer}
+            onChange={(event) => setCorrectAnswer(event.target.value.toUpperCase())}
+          />
+        </label>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">Answer choices optional</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Add these if you want better explanations later. You can skip them for fast logging.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {choices.map((choice, index) => (
+            <label key={choice.label} className="space-y-2">
+              <span className="text-sm font-medium text-slate-700">Choice {choice.label}</span>
+              <input
+                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+                value={choice.text}
+                onChange={(event) => {
+                  const next = [...choices];
+                  next[index] = { ...choice, text: event.target.value };
+                  setChoices(next);
+                }}
+              />
+            </label>
+          ))}
         </div>
       </div>
-    </form>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-900">Reasoning skills optional</h2>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {safeReasoningSkills.map((skill) => (
+            <button
+              key={skill.id}
+              type="button"
+              onClick={() => toggleSkill(skill.id)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                skillIds.includes(skill.id)
+                  ? "border-slate-900 bg-slate-900 text-white"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              {skill.code}: {skill.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Confidence optional</span>
+          <select
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            value={confidence}
+            onChange={(event) => setConfidence(event.target.value)}
+          >
+            <option value="">Not sure</option>
+            {[1, 2, 3, 4, 5].map((value) => (
+              <option key={value} value={value}>
+                {value}/5
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="space-y-2">
+          <span className="text-sm font-medium text-slate-700">Time spent seconds optional</span>
+          <input
+            className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+            type="number"
+            min="0"
+            value={timeSpent}
+            onChange={(event) => setTimeSpent(event.target.value)}
+          />
+        </label>
+      </div>
+
+      <label className="block space-y-2">
+        <span className="text-sm font-medium text-slate-700">Notes optional</span>
+        <textarea
+          className="min-h-24 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+          placeholder="Why did this one feel hard? What should future you remember?"
+          value={notes}
+          onChange={(event) => setNotes(event.target.value)}
+        />
+      </label>
+
+      <div className="sticky bottom-0 -mx-4 border-t border-slate-200 bg-white/95 p-4 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0">
+        <div className="flex flex-col gap-3 md:flex-row md:justify-end">
+          <button
+            type="button"
+            onClick={() => submit(true)}
+            disabled={isSubmitting}
+            className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 disabled:opacity-50"
+          >
+            Save & log another
+          </button>
+          <button
+            type="button"
+            onClick={() => submit(false)}
+            disabled={isSubmitting}
+            className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {isSubmitting ? "Saving..." : "Save mistake"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1,2 +1,8 @@
-import { Card, CardContent, CardTitle } from "@/components/ui/card";
-export function TodayCard() { return <Card><CardTitle>Today's focus</CardTitle><CardContent>Log 3 recent misses to unlock a useful recommendation.</CardContent></Card>; }
+export function TodayCard({ recommendation }: { recommendation: string }) {
+  return (
+    <section className="rounded-2xl border bg-slate-950 p-5 text-white shadow-sm">
+      <p className="text-sm font-medium text-slate-300">Today&apos;s focus</p>
+      <p className="mt-2 text-lg font-semibold">{recommendation}</p>
+    </section>
+  );
+}

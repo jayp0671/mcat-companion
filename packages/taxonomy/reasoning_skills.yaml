@@ -1,0 +1,9 @@
+skills:
+  - code: SIRS1
+    name: Knowledge of Scientific Concepts and Principles
+  - code: SIRS2
+    name: Scientific Reasoning and Problem Solving
+  - code: SIRS3
+    name: Reasoning about Research Design and Execution
+  - code: SIRS4
+    name: Data-Based and Statistical Reasoning

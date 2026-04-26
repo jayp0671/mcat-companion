@@ -1,0 +1,27 @@
+section: chem_phys
+name: Chemical and Physical Foundations of Biological Systems
+foundational_concepts:
+  - code: "CHEM_PHYS-FOUNDATION"
+    name: "MVP foundation"
+    content_categories:
+      - code: "CHEM_PHYS-CAT"
+        name: "MVP content category"
+        topics:
+          - code: "CH.1"
+            name: "Atomic structure"
+            subtopics: []
+          - code: "CH.2"
+            name: "Chemical bonding"
+            subtopics: []
+          - code: "CH.3"
+            name: "Thermodynamics"
+            subtopics: []
+          - code: "CH.4"
+            name: "Fluids"
+            subtopics: []
+          - code: "CH.5"
+            name: "Electrostatics"
+            subtopics: []
+          - code: "CH.6"
+            name: "Optics"
+            subtopics: []

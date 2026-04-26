@@ -1,0 +1,19 @@
+version: 1.0.0
+purpose: Explain a logged MCAT mistake in a constrained, student-friendly way.
+inputs:
+  - stem
+  - choices
+  - correct_label
+  - selected_label
+  - topic_context
+  - confidence
+output_schema:
+  correct_explanation: string
+  distractor_explanations: object
+  key_concept: string
+  common_misconception: string
+guardrails:
+  - Return valid JSON only.
+  - Explain from first principles.
+  - Cross-check with official explanations when available.
+  - Do not claim certainty if the provided question is incomplete.

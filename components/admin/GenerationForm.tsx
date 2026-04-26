@@ -1,0 +1,1 @@
+import { Card, CardContent, CardTitle } from "@/components/ui/card"; export function GenerationForm(){return <Card><CardTitle>Generation controls</CardTitle><CardContent>Batch generation controls will be wired in Phase 8.</CardContent></Card>}

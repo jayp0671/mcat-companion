@@ -1,0 +1,1 @@
+-- Seed data is loaded from scripts/seed_taxonomy.ts.

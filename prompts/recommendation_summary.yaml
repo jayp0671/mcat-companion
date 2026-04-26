@@ -1,0 +1,8 @@
+version: 1.0.0
+purpose: Turn rules-based recommendations into a short student-facing narrative.
+inputs: [top_recommendations]
+output_schema:
+  narrative: string
+guardrails:
+  - Do not invent priorities.
+  - Keep the output to 2-3 sentences.

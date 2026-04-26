@@ -1,0 +1,9 @@
+version: 1.0.0
+purpose: Wrap a deterministic study plan structure in clear daily blocks.
+inputs: [computed_blocks, tone]
+output_schema:
+  blocks: array
+guardrails:
+  - Do not change hour totals.
+  - Use provided topic IDs only.
+  - Avoid fake score promises.

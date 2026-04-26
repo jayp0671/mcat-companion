@@ -1,5 +1,6 @@
 create extension if not exists "uuid-ossp";
 create extension if not exists vector;
+create extension if not exists "pgcrypto";
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -15,7 +16,7 @@ create table if not exists public.profiles (
 );
 
 create table if not exists public.taxonomy_nodes (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   parent_id uuid references public.taxonomy_nodes(id) on delete cascade,
   level text check (level in ('section','foundation','category','topic','subtopic')),
   code text unique,
@@ -31,7 +32,7 @@ create index if not exists taxonomy_nodes_code_idx on public.taxonomy_nodes(code
 create index if not exists taxonomy_nodes_section_idx on public.taxonomy_nodes(section);
 
 create table if not exists public.reasoning_skills (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   code text unique not null,
   name text not null,
   description text,
@@ -40,7 +41,7 @@ create table if not exists public.reasoning_skills (
 );
 
 create table if not exists public.questions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   stem text not null,
   passage text,
   format text check (format in ('discrete','passage')) default 'discrete',
@@ -62,7 +63,7 @@ create index if not exists questions_topic_idx on public.questions(topic_id);
 create index if not exists questions_source_type_idx on public.questions(source_type);
 
 create table if not exists public.question_choices (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   question_id uuid references public.questions(id) on delete cascade,
   label text check (label in ('A','B','C','D')),
   text text not null,
@@ -80,7 +81,7 @@ create table if not exists public.question_skills (
 );
 
 create table if not exists public.question_explanations (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   question_id uuid unique references public.questions(id) on delete cascade,
   correct_explanation text,
   distractor_explanations jsonb,
@@ -94,7 +95,7 @@ create table if not exists public.question_explanations (
 );
 
 create table if not exists public.mistake_log_entries (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   question_id uuid references public.questions(id) on delete cascade,
   her_selected_answer text,
@@ -109,7 +110,7 @@ create table if not exists public.mistake_log_entries (
 create index if not exists mistake_log_entries_user_logged_idx on public.mistake_log_entries(user_id, logged_at desc);
 
 create table if not exists public.practice_sessions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   mode text check (mode in ('topic','weakness','mixed','diagnostic')),
   params jsonb,
@@ -122,7 +123,7 @@ create table if not exists public.practice_sessions (
 );
 
 create table if not exists public.session_questions (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   session_id uuid references public.practice_sessions(id) on delete cascade,
   question_id uuid references public.questions(id) on delete cascade,
   position int,
@@ -132,7 +133,7 @@ create table if not exists public.session_questions (
 );
 
 create table if not exists public.student_answers (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   session_id uuid references public.practice_sessions(id) on delete cascade,
   question_id uuid references public.questions(id) on delete cascade,
@@ -149,7 +150,7 @@ create index if not exists student_answers_user_answered_idx on public.student_a
 create index if not exists student_answers_user_question_idx on public.student_answers(user_id, question_id);
 
 create table if not exists public.mistake_tags (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   answer_id uuid references public.student_answers(id) on delete cascade,
   tag_type text check (tag_type in ('content_gap','reasoning_error','careless','timing')),
   tag_value text,
@@ -159,7 +160,7 @@ create table if not exists public.mistake_tags (
 );
 
 create table if not exists public.mastery_scores (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   taxonomy_node_id uuid references public.taxonomy_nodes(id) on delete cascade,
   score float check (score between 0 and 100),
@@ -171,7 +172,7 @@ create table if not exists public.mastery_scores (
 );
 
 create table if not exists public.skill_mastery_scores (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   reasoning_skill_id uuid references public.reasoning_skills(id) on delete cascade,
   score float check (score between 0 and 100),
@@ -183,7 +184,7 @@ create table if not exists public.skill_mastery_scores (
 );
 
 create table if not exists public.study_plans (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   generated_at timestamptz default now(),
   valid_from date,
@@ -196,7 +197,7 @@ create table if not exists public.study_plans (
 );
 
 create table if not exists public.recommendations (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   generated_at timestamptz default now(),
   items jsonb,
@@ -206,7 +207,7 @@ create table if not exists public.recommendations (
 );
 
 create table if not exists public.diagnosis_reports (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade,
   generated_at timestamptz default now(),
   period_start date,
@@ -218,7 +219,7 @@ create table if not exists public.diagnosis_reports (
 );
 
 create table if not exists public.ai_generations (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   kind text check (kind in ('explanation','question','classification','diagnosis','plan','recommendation')),
   provider text,
   model text,
@@ -234,7 +235,7 @@ create table if not exists public.ai_generations (
 );
 
 create table if not exists public.audit_logs (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   actor_id uuid,
   action text,
   entity_type text,

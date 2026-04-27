@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { generateExplanationWithFallback } from "@/lib/ai/retry";
-import { env } from "@/lib/config";
+import { getAiProviderMetadata } from "@/lib/ai/metadata";
+
 
 type RouteContext = { params: { id: string } };
 
@@ -48,6 +49,8 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
   }
 
   const start = Date.now();
+  const aiMetadata = getAiProviderMetadata();
+
   try {
     const choices = Array.isArray(questionRaw?.choices) ? questionRaw.choices : [];
     const generated = await generateExplanationWithFallback({
@@ -71,7 +74,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
         key_concept: generated.key_concept,
         common_misconception: generated.common_misconception ?? null,
         generated_by: "ai",
-        model_used: env.LLM_PROVIDER === "nvidia" ? env.NVIDIA_MODEL : env.ANTHROPIC_MODEL,
+        model_used: aiMetadata.model,
         prompt_version: "explanation-1.0.0",
       })
       .select("*")
@@ -83,8 +86,8 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
 
     await supabase.from("ai_generations").insert({
       kind: "explanation",
-      provider: env.LLM_PROVIDER,
-      model: env.LLM_PROVIDER === "nvidia" ? env.NVIDIA_MODEL : env.ANTHROPIC_MODEL,
+      provider: aiMetadata.provider,
+      model: aiMetadata.model,
       prompt_version: "explanation-1.0.0",
       input: { mistake_id: params.id, question_id: questionRaw.id },
       output: generated,
@@ -97,7 +100,8 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
   } catch (err) {
     await supabase.from("ai_generations").insert({
       kind: "explanation",
-      provider: env.LLM_PROVIDER,
+      provider: aiMetadata.provider,
+      model: aiMetadata.model,
       prompt_version: "explanation-1.0.0",
       input: { mistake_id: params.id, question_id: questionRaw?.id },
       output: null,

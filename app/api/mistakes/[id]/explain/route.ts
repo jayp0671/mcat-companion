@@ -2,9 +2,37 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { generateExplanationWithFallback } from "@/lib/ai/retry";
 import { getAiProviderMetadata } from "@/lib/ai/metadata";
-
+import { getErrorMessage } from "@/lib/ai/errors";
 
 type RouteContext = { params: { id: string } };
+
+type ChoiceRow = {
+  label: "A" | "B" | "C" | "D";
+  text: string;
+  is_correct?: boolean | null;
+  position?: number | null;
+};
+
+function normalizeOne<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+function normalizeChoices(value: unknown): ChoiceRow[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((choice) => choice as Partial<ChoiceRow>)
+    .filter((choice): choice is ChoiceRow =>
+      ["A", "B", "C", "D"].includes(String(choice.label)) && typeof choice.text === "string" && choice.text.trim().length > 0,
+    )
+    .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+}
+
+function normalizeLabel(value: unknown): "A" | "B" | "C" | "D" | undefined {
+  const label = String(value ?? "").trim().toUpperCase();
+  return ["A", "B", "C", "D"].includes(label) ? (label as "A" | "B" | "C" | "D") : undefined;
+}
 
 export async function POST(_request: NextRequest, { params }: RouteContext) {
   const supabase = createSupabaseServerClient();
@@ -41,8 +69,13 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ error: error?.message ?? "Mistake not found" }, { status: 404 });
   }
 
-  const questionRaw = Array.isArray((mistake as any).question) ? (mistake as any).question[0] : (mistake as any).question;
-  const existing = Array.isArray(questionRaw?.explanation) ? questionRaw.explanation[0] : questionRaw?.explanation;
+  const questionRaw = normalizeOne((mistake as any).question);
+
+  if (!questionRaw?.id || !questionRaw?.stem) {
+    return NextResponse.json({ error: "Mistake is missing its linked question." }, { status: 422 });
+  }
+
+  const existing = normalizeOne(questionRaw.explanation);
 
   if (existing) {
     return NextResponse.json({ explanation: existing, cached: true });
@@ -50,20 +83,20 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
 
   const start = Date.now();
   const aiMetadata = getAiProviderMetadata();
+  const choices = normalizeChoices(questionRaw.choices);
+
+  const input = {
+    stem: questionRaw.stem,
+    passage: questionRaw.passage,
+    choices: choices.map((choice) => ({ label: choice.label, text: choice.text, is_correct: Boolean(choice.is_correct) })),
+    correctLabel: normalizeLabel((mistake as any).correct_answer),
+    selectedLabel: normalizeLabel((mistake as any).her_selected_answer),
+    topicContext: normalizeOne(questionRaw.topic)?.name ?? undefined,
+    confidence: (mistake as any).her_confidence ?? undefined,
+  };
 
   try {
-    const choices = Array.isArray(questionRaw?.choices) ? questionRaw.choices : [];
-    const generated = await generateExplanationWithFallback({
-      stem: questionRaw?.stem,
-      passage: questionRaw?.passage,
-      choices: choices.map((choice: any) => ({ label: choice.label, text: choice.text })),
-      correct_label: ["A", "B", "C", "D"].includes(String(mistake.correct_answer).toUpperCase())
-        ? (String(mistake.correct_answer).toUpperCase() as "A" | "B" | "C" | "D")
-        : undefined,
-      her_answer: mistake.her_selected_answer,
-      confidence: mistake.her_confidence ?? undefined,
-      topic_context: questionRaw?.topic?.name,
-    });
+    const generated = await generateExplanationWithFallback(input);
 
     const { data: explanation, error: insertError } = await supabase
       .from("question_explanations")
@@ -89,7 +122,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
       provider: aiMetadata.provider,
       model: aiMetadata.model,
       prompt_version: "explanation-1.0.0",
-      input: { mistake_id: params.id, question_id: questionRaw.id },
+      input: { mistake_id: params.id, question_id: questionRaw.id, request: input },
       output: generated,
       latency_ms: Date.now() - start,
       status: "success",
@@ -98,18 +131,36 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
 
     return NextResponse.json({ explanation, cached: false });
   } catch (err) {
+    const message = getErrorMessage(err);
+    console.error("Explanation generation failed", {
+      mistakeId: params.id,
+      questionId: questionRaw.id,
+      provider: aiMetadata.provider,
+      model: aiMetadata.model,
+      error: message,
+    });
+
     await supabase.from("ai_generations").insert({
       kind: "explanation",
       provider: aiMetadata.provider,
       model: aiMetadata.model,
       prompt_version: "explanation-1.0.0",
-      input: { mistake_id: params.id, question_id: questionRaw?.id },
+      input: { mistake_id: params.id, question_id: questionRaw.id, request: input },
       output: null,
       latency_ms: Date.now() - start,
       status: "error",
-      error_message: err instanceof Error ? err.message : "Unknown explanation error",
-      linked_entity_id: questionRaw?.id,
+      error_message: message,
+      linked_entity_id: questionRaw.id,
     });
-    return NextResponse.json({ error: "Could not generate explanation right now." }, { status: 502 });
+
+    return NextResponse.json(
+      {
+        error: "Could not generate explanation right now.",
+        details: process.env.NODE_ENV === "development" ? message : undefined,
+        provider: process.env.NODE_ENV === "development" ? aiMetadata.provider : undefined,
+        model: process.env.NODE_ENV === "development" ? aiMetadata.model : undefined,
+      },
+      { status: 502 },
+    );
   }
 }

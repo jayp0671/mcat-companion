@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { env } from "@/lib/config";
+import { AiProviderError } from "./errors";
 import type {
   ClassifyInput,
   DiagnoseInput,
@@ -18,7 +19,7 @@ import {
 
 function requireValue(name: string, value: string | undefined): string {
   if (!value) {
-    throw new Error(`Missing required environment variable: ${name}`);
+    throw new AiProviderError("nvidia", `Missing required environment variable: ${name}`);
   }
 
   return value;
@@ -47,7 +48,7 @@ function extractJson(text: string): unknown {
       return JSON.parse(cleaned.slice(objectStart, objectEnd + 1));
     }
 
-    throw new Error("AI provider returned non-JSON output.");
+    throw new AiProviderError("nvidia", "AI provider returned non-JSON output.");
   }
 }
 
@@ -65,50 +66,69 @@ function questionsArray(data: unknown): unknown[] {
     return (data as { questions: unknown[] }).questions;
   }
 
-  throw new Error("AI provider did not return a questions array.");
+  throw new AiProviderError("nvidia", "AI provider did not return a questions array.");
 }
 
 export class NvidiaProvider implements LLMProvider {
   private readonly client: OpenAI;
+  private readonly model: string;
 
   constructor() {
+    this.model = requireValue("NVIDIA_MODEL", env.NVIDIA_MODEL);
     this.client = new OpenAI({
-      baseURL: env.NVIDIA_BASE_URL,
+      baseURL: requireValue("NVIDIA_BASE_URL", env.NVIDIA_BASE_URL),
       apiKey: requireValue("NVIDIA_API_KEY", env.NVIDIA_API_KEY),
     });
   }
 
   private async jsonCall(system: string, input: unknown) {
-    const response = await this.client.chat.completions.create({
-      model: env.NVIDIA_MODEL,
-      temperature: 0.25,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: JSON.stringify(input) },
-      ],
-    });
+    try {
+      const response = await this.client.chat.completions.create({
+        model: this.model,
+        temperature: 0.25,
+        max_tokens: env.MAX_TOKENS_PER_CALL,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: JSON.stringify(input) },
+        ],
+      });
 
-    const text = response.choices[0]?.message?.content;
-    if (!text) {
-      throw new Error("NVIDIA returned an empty response.");
+      const text = response.choices[0]?.message?.content;
+      if (!text) {
+        throw new AiProviderError("nvidia", "NVIDIA returned an empty response.");
+      }
+
+      return extractJson(text);
+    } catch (error) {
+      if (error instanceof AiProviderError) {
+        throw error;
+      }
+
+      throw new AiProviderError("nvidia", error instanceof Error ? error.message : "NVIDIA request failed", error);
     }
-
-    return extractJson(text);
   }
 
   async generateExplanation(input: ExplanationInput) {
     const data = await this.jsonCall(
       [
         "You are a careful MCAT tutor.",
-        "Return only valid JSON with this exact shape:",
+        "Return only valid JSON. No markdown. No prose outside JSON.",
+        "Use this exact shape:",
         "{\"correct_explanation\": string, \"distractor_explanations\": {\"A\": string, \"B\": string, \"C\": string, \"D\": string}, \"key_concept\": string, \"common_misconception\": string | null}",
-        "Use first-principles reasoning, do not invent facts, and remind the student to cross-check official explanations when relevant.",
+        "Explain why the correct answer is right from first principles.",
+        "For each distractor A-D, explain the misconception or why it is wrong.",
+        "Do not invent facts beyond the provided question context.",
+        "Remind the student to cross-check official explanations when relevant.",
       ].join("\n"),
       input,
     );
 
-    return explanationSchema.parse(data);
+    try {
+      return explanationSchema.parse(data);
+    } catch (error) {
+      throw new AiProviderError("nvidia", "NVIDIA explanation output failed schema validation.", error);
+    }
   }
 
   async generateQuestion(input: QuestionGenInput) {
@@ -123,7 +143,11 @@ export class NvidiaProvider implements LLMProvider {
       input,
     );
 
-    return draftQuestionsSchema.parse(questionsArray(data));
+    try {
+      return draftQuestionsSchema.parse(questionsArray(data));
+    } catch (error) {
+      throw new AiProviderError("nvidia", "NVIDIA question output failed schema validation.", error);
+    }
   }
 
   async classifyQuestion(input: ClassifyInput) {

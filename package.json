@@ -14,7 +14,8 @@
     "seed:taxonomy": "tsx scripts/seed_taxonomy.ts",
     "generate:questions": "tsx scripts/generate_questions.ts",
     "backfill:explanations": "tsx scripts/backfill_explanations.ts",
-    "backup:db": "tsx scripts/backup_db.ts"
+    "backup:db": "tsx scripts/backup_db.ts",
+    "cleanup:mock-data": "dotenv -e .env.local -- tsx scripts/cleanup_mock_data.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

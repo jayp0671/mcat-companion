@@ -1,5 +1,7 @@
+import { env } from "@/lib/config";
 import { AnthropicProvider } from "./anthropic";
 import { getProvider } from "./index";
+import { AiFallbackError } from "./errors";
 import type {
   ClassifyInput,
   DiagnoseInput,
@@ -8,27 +10,53 @@ import type {
   QuestionGenInput,
 } from "./types";
 
+async function withOptionalAnthropicFallback<T>(operation: () => Promise<T>, fallbackOperation: () => Promise<T>) {
+  try {
+    return await operation();
+  } catch (primaryError) {
+    if (!env.ANTHROPIC_API_KEY) {
+      throw new AiFallbackError(primaryError);
+    }
+
+    try {
+      return await fallbackOperation();
+    } catch (fallbackError) {
+      throw new AiFallbackError(primaryError, fallbackError);
+    }
+  }
+}
+
 export async function generateExplanationWithFallback(input: ExplanationInput) {
-  try { return await getProvider().generateExplanation(input); }
-  catch { return new AnthropicProvider().generateExplanation(input); }
+  return withOptionalAnthropicFallback(
+    () => getProvider().generateExplanation(input),
+    () => new AnthropicProvider().generateExplanation(input),
+  );
 }
 
 export async function generateQuestionsWithFallback(input: QuestionGenInput) {
-  try { return await getProvider().generateQuestion(input); }
-  catch { return new AnthropicProvider().generateQuestion(input); }
+  return withOptionalAnthropicFallback(
+    () => getProvider().generateQuestion(input),
+    () => new AnthropicProvider().generateQuestion(input),
+  );
 }
 
 export async function classifyQuestionWithFallback(input: ClassifyInput) {
-  try { return await getProvider().classifyQuestion(input); }
-  catch { return new AnthropicProvider().classifyQuestion(input); }
+  return withOptionalAnthropicFallback(
+    () => getProvider().classifyQuestion(input),
+    () => new AnthropicProvider().classifyQuestion(input),
+  );
 }
 
 export async function diagnoseMistakesWithFallback(input: DiagnoseInput) {
-  try { return await getProvider().diagnoseMistakes(input); }
-  catch { return new AnthropicProvider().diagnoseMistakes(input); }
+  return withOptionalAnthropicFallback(
+    () => getProvider().diagnoseMistakes(input),
+    () => new AnthropicProvider().diagnoseMistakes(input),
+  );
 }
 
 export async function generatePlanNarrativeWithFallback(input: PlanInput) {
-  try { return await getProvider().generatePlanNarrative(input); }
-  catch { return new AnthropicProvider().generatePlanNarrative(input); }
+  return withOptionalAnthropicFallback(
+    () => getProvider().generatePlanNarrative(input),
+    () => new AnthropicProvider().generatePlanNarrative(input),
+  );
 }

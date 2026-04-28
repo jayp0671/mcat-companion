@@ -1,62 +1,101 @@
-import type {
-  Classification,
-  DiagnosisReport,
-  DraftQuestion,
-  Explanation,
-  PlanNarrative,
-} from "./validators";
+export type ChoiceLabel = "A" | "B" | "C" | "D";
+
+export type Choice = {
+  label: ChoiceLabel;
+  text: string;
+  is_correct?: boolean;
+};
 
 export type ExplanationInput = {
-  stem?: string;
-  passage?: string | null;
-  choices?: Array<{ label: "A" | "B" | "C" | "D"; text: string }>;
-  correct_label?: "A" | "B" | "C" | "D";
-  her_answer?: string;
-  topic_context?: string;
+  stem: string;
+  choices?: Choice[];
+  correctLabel?: string;
+  selectedLabel?: string;
+  topicContext?: string;
   confidence?: number;
+  [key: string]: unknown;
+};
+
+export type Explanation = {
+  correct_explanation: string;
+  distractor_explanations: Record<string, string>;
+  key_concept: string;
+  common_misconception?: string | null;
 };
 
 export type QuestionGenInput = {
+  topic?: string;
   topicName?: string;
   subtopic?: string;
   difficulty?: number;
   reasoningSkills?: string[];
   count?: number;
+  section?: "chem_phys" | "cars" | "bio_biochem" | "psych_soc";
+  [key: string]: unknown;
+};
+
+export type DraftQuestion = {
+  stem: string;
+  passage?: string | null;
+  section?: "chem_phys" | "cars" | "bio_biochem" | "psych_soc";
+  format?: "discrete" | "passage";
+  difficulty?: number;
+  choices: Choice[];
+  correct_label: ChoiceLabel;
+  brief_rationale: string;
+  suggested_tags: string[];
 };
 
 export type ClassifyInput = {
-  stem?: string;
-  choices?: Array<{ label: "A" | "B" | "C" | "D"; text: string }>;
-  taxonomyTree?: unknown;
+  stem: string;
+  choices?: Choice[];
+  taxonomy?: unknown;
+  [key: string]: unknown;
+};
+
+export type Classification = {
+  section: "chem_phys" | "cars" | "bio_biochem" | "psych_soc" | null;
+  content_category_id: string | null;
+  topic_id: string | null;
+  subtopic_id?: string | null;
+  reasoning_skills: string[];
+  difficulty: number | null;
+  format: "discrete" | "passage" | null;
 };
 
 export type DiagnoseInput = {
   mistakes?: unknown[];
   masteryState?: unknown;
+  [key: string]: unknown;
+};
+
+export type DiagnosisReport = {
+  patterns: Array<{
+    name: string;
+    description: string;
+    evidence_question_ids: string[];
+    recommendation: string;
+  }>;
+  summary: string;
 };
 
 export type PlanInput = {
-  blocks?: unknown[];
+  blocks: unknown[];
+  tone?: string;
   weeklyHours?: number;
   examDate?: string;
+  [key: string]: unknown;
 };
 
-export type RecommendationInput = {
-  recommendations?: unknown[];
+export type PlanNarrative = {
+  narrative: string;
+  blocks?: unknown[];
 };
 
-export type LLMProvider = {
-  generateExplanation(input?: ExplanationInput): Promise<Explanation>;
-  generateQuestion(input?: QuestionGenInput): Promise<DraftQuestion[]>;
-  classifyQuestion(input?: ClassifyInput): Promise<Classification>;
-  diagnoseMistakes(input?: DiagnoseInput): Promise<DiagnosisReport>;
-  generatePlanNarrative(input?: PlanInput): Promise<PlanNarrative>;
-};
-
-export type {
-  Classification,
-  DiagnosisReport,
-  DraftQuestion,
-  Explanation,
-  PlanNarrative,
-};
+export interface LLMProvider {
+  generateExplanation(input: ExplanationInput): Promise<Explanation>;
+  generateQuestion(input: QuestionGenInput): Promise<DraftQuestion[]>;
+  classifyQuestion(input: ClassifyInput): Promise<Classification>;
+  diagnoseMistakes(input: DiagnoseInput): Promise<DiagnosisReport>;
+  generatePlanNarrative(input: PlanInput): Promise<PlanNarrative>;
+}

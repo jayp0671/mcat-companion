@@ -9,26 +9,26 @@ export type AiGenerationKind =
   | "recommendation";
 
 export function getAiProviderMetadata() {
-  const provider = env.LLM_PROVIDER ?? "mock";
-
-  if (provider === "mock") {
-    return {
-      provider: "mock",
-      model: "mock",
-    };
-  }
+  const provider = env.LLM_PROVIDER ?? "nvidia";
 
   if (provider === "nvidia") {
     return {
       provider: "nvidia",
-      model: env.NVIDIA_MODEL ?? "unknown-nvidia-model",
+      model: env.NVIDIA_MODEL ?? "meta/llama-3.3-70b-instruct",
     };
   }
 
   if (provider === "anthropic") {
     return {
       provider: "anthropic",
-      model: env.ANTHROPIC_MODEL ?? "unknown-anthropic-model",
+      model: env.ANTHROPIC_MODEL ?? "claude-haiku-4-5-20251001",
+    };
+  }
+
+  if (provider === "mock") {
+    return {
+      provider: "mock-test-only",
+      model: "mock-test-only",
     };
   }
 

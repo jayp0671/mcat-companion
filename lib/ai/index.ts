@@ -5,11 +5,11 @@ import { MockProvider } from "./mock";
 import type { LLMProvider } from "./types";
 
 export function getProvider(): LLMProvider {
-  const provider = env.LLM_PROVIDER ?? "mock";
+  const provider = env.LLM_PROVIDER ?? "nvidia";
 
-  if (process.env.NODE_ENV === "production" && provider === "mock") {
+  if (provider === "mock" && process.env.NODE_ENV !== "test") {
     throw new Error(
-      "LLM_PROVIDER=mock is not allowed in production. Set LLM_PROVIDER=nvidia or LLM_PROVIDER=anthropic.",
+      "LLM_PROVIDER=mock is test-only. Set LLM_PROVIDER=nvidia or LLM_PROVIDER=anthropic for live app usage.",
     );
   }
 

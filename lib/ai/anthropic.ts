@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { env } from "@/lib/config";
-import { MockProvider } from "./mock";
 import type {
   ClassifyInput,
   DiagnoseInput,
@@ -17,57 +16,130 @@ import {
   planNarrativeSchema,
 } from "./validators";
 
-function safeJson(text: string) {
-  try { return JSON.parse(text); } catch { return {}; }
+function requireValue(name: string, value: string | undefined): string {
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
+function extractJson(text: string): unknown {
+  const cleaned = text
+    .trim()
+    .replace(/^```(?:json)?/i, "")
+    .replace(/```$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const objectStart = cleaned.indexOf("{");
+    const objectEnd = cleaned.lastIndexOf("}");
+    const arrayStart = cleaned.indexOf("[");
+    const arrayEnd = cleaned.lastIndexOf("]");
+
+    if (arrayStart !== -1 && arrayEnd > arrayStart) {
+      return JSON.parse(cleaned.slice(arrayStart, arrayEnd + 1));
+    }
+
+    if (objectStart !== -1 && objectEnd > objectStart) {
+      return JSON.parse(cleaned.slice(objectStart, objectEnd + 1));
+    }
+
+    throw new Error("AI provider returned non-JSON output.");
+  }
+}
+
+function questionsArray(data: unknown): unknown[] {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (
+    data &&
+    typeof data === "object" &&
+    "questions" in data &&
+    Array.isArray((data as { questions?: unknown }).questions)
+  ) {
+    return (data as { questions: unknown[] }).questions;
+  }
+
+  throw new Error("AI provider did not return a questions array.");
 }
 
 export class AnthropicProvider implements LLMProvider {
-  private readonly client = env.ANTHROPIC_API_KEY
-    ? new Anthropic({ apiKey: env.ANTHROPIC_API_KEY })
-    : null;
+  private readonly client: Anthropic;
 
-  private readonly mock = new MockProvider();
-
-  private async jsonCall(instruction: string, input: unknown) {
-    if (!this.client) return null;
-    const message = await this.client.messages.create({
-      model: env.ANTHROPIC_MODEL,
-      max_tokens: 1800,
-      temperature: 0.3,
-      messages: [{ role: "user", content: `${instruction}\nReturn only valid JSON.\nInput: ${JSON.stringify(input)}` }],
+  constructor() {
+    this.client = new Anthropic({
+      apiKey: requireValue("ANTHROPIC_API_KEY", env.ANTHROPIC_API_KEY),
     });
-    const text = message.content[0]?.type === "text" ? message.content[0].text : "{}";
-    return safeJson(text);
   }
 
-  async generateExplanation(input?: ExplanationInput) {
-    const data = await this.jsonCall("Generate a concise MCAT explanation with correct and distractor rationales.", input);
-    if (!data) return this.mock.generateExplanation(input);
+  private async jsonCall(instruction: string, input: unknown) {
+    const message = await this.client.messages.create({
+      model: env.ANTHROPIC_MODEL,
+      max_tokens: 2200,
+      temperature: 0.25,
+      messages: [
+        {
+          role: "user",
+          content: `${instruction}\n\nReturn only valid JSON. No markdown.\n\nInput:\n${JSON.stringify(input)}`,
+        },
+      ],
+    });
+
+    const text = message.content[0]?.type === "text" ? message.content[0].text : "";
+    if (!text) {
+      throw new Error("Anthropic returned an empty response.");
+    }
+
+    return extractJson(text);
+  }
+
+  async generateExplanation(input: ExplanationInput) {
+    const data = await this.jsonCall(
+      "Generate an MCAT explanation as {correct_explanation,distractor_explanations,key_concept,common_misconception}. Include A-D distractor rationales when choices are available.",
+      input,
+    );
+
     return explanationSchema.parse(data);
   }
 
-  async generateQuestion(input?: QuestionGenInput) {
-    const data = await this.jsonCall("Generate original MCAT-style practice questions as a JSON array or {questions:[...]}.", input);
-    if (!data) return this.mock.generateQuestion(input);
-    const asArray = Array.isArray(data) ? data : (Array.isArray((data as any).questions) ? (data as any).questions : []);
-    return draftQuestionsSchema.parse(asArray);
+  async generateQuestion(input: QuestionGenInput) {
+    const data = await this.jsonCall(
+      "Generate original, supplementary MCAT-style practice questions. Return {questions:[...]} with exactly four choices per question and one correct_label. Never copy commercial prep material.",
+      input,
+    );
+
+    return draftQuestionsSchema.parse(questionsArray(data));
   }
 
-  async classifyQuestion(input?: ClassifyInput) {
-    const data = await this.jsonCall("Classify the question against supplied MCAT taxonomy IDs.", input);
-    if (!data) return this.mock.classifyQuestion(input);
+  async classifyQuestion(input: ClassifyInput) {
+    const data = await this.jsonCall(
+      "Classify the question using only supplied taxonomy IDs. Return null for uncertain IDs.",
+      input,
+    );
+
     return classificationSchema.parse(data);
   }
 
-  async diagnoseMistakes(input?: DiagnoseInput) {
-    const data = await this.jsonCall("Diagnose evidence-backed MCAT mistake patterns.", input);
-    if (!data) return this.mock.diagnoseMistakes(input);
+  async diagnoseMistakes(input: DiagnoseInput) {
+    const data = await this.jsonCall(
+      "Diagnose evidence-backed MCAT mistake patterns. Return {patterns,summary}. Do not fabricate patterns.",
+      input,
+    );
+
     return diagnosisReportSchema.parse(data);
   }
 
-  async generatePlanNarrative(input?: PlanInput) {
-    const data = await this.jsonCall("Create a concise narrative for the supplied MCAT study plan.", input);
-    if (!data) return this.mock.generatePlanNarrative(input);
+  async generatePlanNarrative(input: PlanInput) {
+    const data = await this.jsonCall(
+      "Write a concise narrative for the supplied deterministic MCAT study plan. Return {narrative,blocks?}. Do not change dates or durations.",
+      input,
+    );
+
     return planNarrativeSchema.parse(data);
   }
 }

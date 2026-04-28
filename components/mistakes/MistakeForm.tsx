@@ -35,7 +35,30 @@ type DraftShape = {
   skillIds: string[];
 };
 
+type ImportedMistakeDraft = {
+  stem: string;
+  passage?: string | null;
+  source_material?: string | null;
+  section?: string | null;
+  format?: "discrete" | "passage" | null;
+  difficulty?: number | null;
+  content_category_id?: string | null;
+  topic_id?: string | null;
+  subtopic_id?: string | null;
+  reasoning_skill_ids?: string[];
+  choices?: ChoiceDraft[];
+  her_selected_answer?: string | null;
+  correct_answer?: string | null;
+  her_confidence?: number | null;
+  time_spent_seconds?: number | null;
+  notes?: string | null;
+  parser_confidence?: number | null;
+  needs_review?: boolean;
+  warnings?: string[];
+};
+
 const STORAGE_KEY = "mcat-companion:mistake-draft:v1";
+const IMPORT_STORAGE_KEY = "mcat-companion:smart-import-raw:v1";
 
 const EMPTY_CHOICES: ChoiceDraft[] = [
   { label: "A", text: "" },
@@ -50,6 +73,22 @@ const FALLBACK_SECTIONS = [
   { value: "bio_biochem", label: "Bio/Biochem" },
   { value: "psych_soc", label: "Psych/Soc" },
 ];
+
+const VALID_SECTIONS = new Set(FALLBACK_SECTIONS.map((section) => section.value));
+const VALID_FORMATS = new Set(["discrete", "passage"]);
+const CHOICE_LABELS: ChoiceDraft["label"][] = ["A", "B", "C", "D"];
+
+function coerceChoiceDrafts(choices: ChoiceDraft[] | undefined): ChoiceDraft[] {
+  const byLabel = new Map<string, string>();
+
+  for (const choice of choices ?? []) {
+    if (!choice?.label || !CHOICE_LABELS.includes(choice.label)) continue;
+    byLabel.set(choice.label, choice.text ?? "");
+  }
+
+  return CHOICE_LABELS.map((label) => ({ label, text: byLabel.get(label) ?? "" }));
+}
+
 
 export function MistakeForm({
   taxonomyNodes,
@@ -76,6 +115,8 @@ export function MistakeForm({
   const [notes, setNotes] = useState("");
   const [choices, setChoices] = useState<ChoiceDraft[]>(EMPTY_CHOICES);
   const [skillIds, setSkillIds] = useState<string[]>([]);
+  const [rawImport, setRawImport] = useState("");
+  const [isParsingImport, setIsParsingImport] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -108,8 +149,16 @@ export function MistakeForm({
     [safeTaxonomyNodes, topicId],
   );
 
+  const validSkillIds = useMemo(
+    () => new Set(safeReasoningSkills.map((skill) => skill.id)),
+    [safeReasoningSkills],
+  );
+
   useEffect(() => {
     const saved = window.localStorage.getItem(STORAGE_KEY);
+    const savedImport = window.localStorage.getItem(IMPORT_STORAGE_KEY);
+
+    if (savedImport) setRawImport(savedImport);
     if (!saved) return;
 
     try {
@@ -181,6 +230,18 @@ export function MistakeForm({
     skillIds,
   ]);
 
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      if (rawImport.trim()) {
+        window.localStorage.setItem(IMPORT_STORAGE_KEY, rawImport);
+      } else {
+        window.localStorage.removeItem(IMPORT_STORAGE_KEY);
+      }
+    }, 500);
+
+    return () => window.clearTimeout(timeout);
+  }, [rawImport]);
+
   function resetForm() {
     setStem("");
     setPassage("");
@@ -198,6 +259,82 @@ export function MistakeForm({
     setChoices(EMPTY_CHOICES);
     setSkillIds([]);
     window.localStorage.removeItem(STORAGE_KEY);
+  }
+
+  function applyImportedDraft(draft: ImportedMistakeDraft) {
+    setStem(draft.stem ?? "");
+    setPassage(draft.passage ?? "");
+    setSourceMaterial(draft.source_material ?? sourceMaterial);
+
+    if (draft.section && VALID_SECTIONS.has(draft.section)) {
+      setSection(draft.section);
+    }
+
+    if (draft.content_category_id) setContentCategoryId(draft.content_category_id);
+    if (draft.topic_id) setTopicId(draft.topic_id);
+    if (draft.subtopic_id) setSubtopicId(draft.subtopic_id);
+
+    if (draft.format && VALID_FORMATS.has(draft.format)) {
+      setFormat(draft.format);
+    }
+
+    if (typeof draft.difficulty === "number") {
+      setDifficulty(Math.max(1, Math.min(5, Math.round(draft.difficulty))));
+    }
+
+    setSelectedAnswer((draft.her_selected_answer ?? "").toUpperCase());
+    setCorrectAnswer((draft.correct_answer ?? "").toUpperCase());
+    setConfidence(draft.her_confidence ? String(draft.her_confidence) : "");
+    setTimeSpent(draft.time_spent_seconds ? String(draft.time_spent_seconds) : "");
+    setNotes(draft.notes ?? "");
+    setChoices(coerceChoiceDrafts(draft.choices));
+    setSkillIds((draft.reasoning_skill_ids ?? []).filter((id) => validSkillIds.has(id)));
+
+    const confidenceLabel =
+      typeof draft.parser_confidence === "number"
+        ? ` Parser confidence: ${Math.round(draft.parser_confidence * 100)}%.`
+        : "";
+    const warningLabel = draft.warnings?.length ? ` Review notes: ${draft.warnings.join(" ")}` : "";
+
+    setMessage(`Smart import filled the form. Review everything before saving.${confidenceLabel}${warningLabel}`);
+  }
+
+  async function parseSmartImport() {
+    const text = rawImport.trim();
+
+    if (text.length < 20) {
+      setMessage("Paste the full copied question/result text first.");
+      return;
+    }
+
+    setIsParsingImport(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch("/api/import/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          raw_text: text,
+          source_material: sourceMaterial.trim() || null,
+          default_section: section,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setMessage(payload?.details ?? payload?.error ?? "Could not parse the pasted question.");
+        return;
+      }
+
+      applyImportedDraft(payload.draft as ImportedMistakeDraft);
+    } catch (error) {
+      console.error("Smart import parse error", error);
+      setMessage("Something went wrong while parsing the pasted question.");
+    } finally {
+      setIsParsingImport(false);
+    }
   }
 
   async function submit(saveAndAnother: boolean) {
@@ -246,6 +383,8 @@ export function MistakeForm({
       }
 
       resetForm();
+      setRawImport("");
+      window.localStorage.removeItem(IMPORT_STORAGE_KEY);
 
       if (saveAndAnother) {
         setMessage("Mistake saved. Ready for the next one.");
@@ -277,6 +416,60 @@ export function MistakeForm({
           {message}
         </div>
       ) : null}
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h2 className="text-base font-semibold text-slate-950">Smart import</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Paste the full copied question, choices, answer result, and explanation. AI will
+              prefill the form, but you still review before saving.
+            </p>
+          </div>
+          <span className="w-fit rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
+            Review before saving
+          </span>
+        </div>
+
+        <textarea
+          className="mt-4 min-h-44 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-400"
+          placeholder={[
+            "Paste messy copied text here, for example:",
+            "Question stem...",
+            "A. ...",
+            "B. ...",
+            "C. ...",
+            "D. ...",
+            "I chose B. Correct answer: C.",
+          ].join("\n")}
+          value={rawImport}
+          onChange={(event) => setRawImport(event.target.value)}
+        />
+
+        <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <p className="text-xs text-slate-500">
+            This sends the pasted text to the configured live AI provider. Do not paste anything
+            outside her private study workflow.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setRawImport("")}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700"
+            >
+              Clear paste
+            </button>
+            <button
+              type="button"
+              onClick={parseSmartImport}
+              disabled={isParsingImport || rawImport.trim().length < 20}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {isParsingImport ? "Parsing..." : "Parse with AI"}
+            </button>
+          </div>
+        </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         <label className="space-y-2">
@@ -534,7 +727,7 @@ export function MistakeForm({
           <button
             type="button"
             onClick={() => submit(true)}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isParsingImport}
             className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 disabled:opacity-50"
           >
             Save & log another
@@ -542,7 +735,7 @@ export function MistakeForm({
           <button
             type="button"
             onClick={() => submit(false)}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isParsingImport}
             className="rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
           >
             {isSubmitting ? "Saving..." : "Save mistake"}

@@ -5,6 +5,7 @@ import type {
   DiagnoseInput,
   ExplanationInput,
   LLMProvider,
+  ParseImportInput,
   PlanInput,
   QuestionGenInput,
 } from "./types";
@@ -13,6 +14,7 @@ import {
   diagnosisReportSchema,
   draftQuestionsSchema,
   explanationSchema,
+  importedMistakeDraftSchema,
   planNarrativeSchema,
 } from "./validators";
 
@@ -114,6 +116,21 @@ export class AnthropicProvider implements LLMProvider {
     );
 
     return draftQuestionsSchema.parse(questionsArray(data));
+  }
+
+
+  async parseImportedMistake(input: ParseImportInput) {
+    const data = await this.jsonCall(
+      [
+        "Parse copied MCAT practice-question text into a mistake-log draft.",
+        "Return JSON with stem, passage, source_material, section, format, difficulty, content_category_id, topic_id, subtopic_id, reasoning_skill_ids, choices, her_selected_answer, correct_answer, her_confidence, time_spent_seconds, notes, parser_confidence, needs_review, and warnings.",
+        "Use only supplied taxonomy/reasoning-skill IDs when clearly supported. Otherwise return null or an empty array.",
+        "Do not invent missing answer choice text. The student will review before saving.",
+      ].join("\n"),
+      input,
+    );
+
+    return importedMistakeDraftSchema.parse(data);
   }
 
   async classifyQuestion(input: ClassifyInput) {

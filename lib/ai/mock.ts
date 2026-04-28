@@ -42,6 +42,37 @@ export class MockProvider implements LLMProvider {
     ];
   }
 
+
+  async parseImportedMistake() {
+    assertTestOnly();
+    return {
+      stem: "Test-only imported stem.",
+      passage: null,
+      source_material: "Test-only source",
+      section: "bio_biochem" as const,
+      format: "discrete" as const,
+      difficulty: 3,
+      content_category_id: null,
+      topic_id: null,
+      subtopic_id: null,
+      reasoning_skill_ids: [],
+      choices: [
+        { label: "A" as const, text: "Choice A" },
+        { label: "B" as const, text: "Choice B" },
+        { label: "C" as const, text: "Choice C" },
+        { label: "D" as const, text: "Choice D" },
+      ],
+      her_selected_answer: "B",
+      correct_answer: "C",
+      her_confidence: 3,
+      time_spent_seconds: null,
+      notes: "Test-only parsed notes.",
+      parser_confidence: 0.9,
+      needs_review: true,
+      warnings: [],
+    };
+  }
+
   async classifyQuestion() {
     assertTestOnly();
     return {

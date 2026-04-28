@@ -6,6 +6,7 @@ import type {
   DiagnoseInput,
   ExplanationInput,
   LLMProvider,
+  ParseImportInput,
   PlanInput,
   QuestionGenInput,
 } from "./types";
@@ -14,6 +15,7 @@ import {
   diagnosisReportSchema,
   draftQuestionsSchema,
   explanationSchema,
+  importedMistakeDraftSchema,
   planNarrativeSchema,
 } from "./validators";
 
@@ -147,6 +149,30 @@ export class NvidiaProvider implements LLMProvider {
       return draftQuestionsSchema.parse(questionsArray(data));
     } catch (error) {
       throw new AiProviderError("nvidia", "NVIDIA question output failed schema validation.", error);
+    }
+  }
+
+
+  async parseImportedMistake(input: ParseImportInput) {
+    const data = await this.jsonCall(
+      [
+        "You parse copied MCAT practice-question text into a mistake-log draft.",
+        "Return only valid JSON. No markdown. No prose outside JSON.",
+        "Use this exact shape:",
+        `{"stem": string, "passage": string|null, "source_material": string|null, "section": "chem_phys"|"cars"|"bio_biochem"|"psych_soc"|null, "format": "discrete"|"passage"|null, "difficulty": number|null, "content_category_id": uuid|null, "topic_id": uuid|null, "subtopic_id": uuid|null, "reasoning_skill_ids": uuid[], "choices": [{"label":"A"|"B"|"C"|"D","text": string}], "her_selected_answer": string|null, "correct_answer": string|null, "her_confidence": number|null, "time_spent_seconds": number|null, "notes": string|null, "parser_confidence": number, "needs_review": true, "warnings": string[]}`,
+        "Extract the stem, passage/context, answer choices, selected answer, and correct answer from messy copied text.",
+        "Use taxonomy IDs only when the supplied taxonomy clearly supports the match. Otherwise return null.",
+        "Use reasoning skill IDs only from the supplied reasoningSkills list. Otherwise return an empty array.",
+        "Do not invent answer choice text. If a choice is missing, omit it from choices.",
+        "Set needs_review to true because the student must confirm before saving.",
+      ].join("\n"),
+      input,
+    );
+
+    try {
+      return importedMistakeDraftSchema.parse(data);
+    } catch (error) {
+      throw new AiProviderError("nvidia", "NVIDIA import parser output failed schema validation.", error);
     }
   }
 

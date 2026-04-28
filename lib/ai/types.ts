@@ -46,6 +46,48 @@ export type DraftQuestion = {
   suggested_tags: string[];
 };
 
+
+export type ImportedMistakeDraft = {
+  stem: string;
+  passage?: string | null;
+  source_material?: string | null;
+  section?: "chem_phys" | "cars" | "bio_biochem" | "psych_soc" | null;
+  format?: "discrete" | "passage" | null;
+  difficulty?: number | null;
+  content_category_id?: string | null;
+  topic_id?: string | null;
+  subtopic_id?: string | null;
+  reasoning_skill_ids: string[];
+  choices: Choice[];
+  her_selected_answer?: string | null;
+  correct_answer?: string | null;
+  her_confidence?: number | null;
+  time_spent_seconds?: number | null;
+  notes?: string | null;
+  parser_confidence?: number | null;
+  needs_review?: boolean;
+  warnings?: string[];
+};
+
+export type ParseImportInput = {
+  rawText: string;
+  sourceMaterial?: string | null;
+  taxonomyNodes?: Array<{
+    id: string;
+    parent_id: string | null;
+    level: string;
+    code: string | null;
+    name: string;
+    section: string | null;
+  }>;
+  reasoningSkills?: Array<{
+    id: string;
+    code: string;
+    name: string;
+  }>;
+  defaultSection?: "chem_phys" | "cars" | "bio_biochem" | "psych_soc";
+};
+
 export type ClassifyInput = {
   stem: string;
   choices?: Choice[];
@@ -95,6 +137,7 @@ export type PlanNarrative = {
 export interface LLMProvider {
   generateExplanation(input: ExplanationInput): Promise<Explanation>;
   generateQuestion(input: QuestionGenInput): Promise<DraftQuestion[]>;
+  parseImportedMistake(input: ParseImportInput): Promise<ImportedMistakeDraft>;
   classifyQuestion(input: ClassifyInput): Promise<Classification>;
   diagnoseMistakes(input: DiagnoseInput): Promise<DiagnosisReport>;
   generatePlanNarrative(input: PlanInput): Promise<PlanNarrative>;

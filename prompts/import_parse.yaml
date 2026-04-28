@@ -1,0 +1,32 @@
+version: import_parse-1.0.0
+purpose: Parse messy copied MCAT question/result text into a mistake-log draft.
+inputs:
+  - rawText
+  - sourceMaterial
+  - taxonomyNodes
+  - reasoningSkills
+output_schema:
+  stem: string
+  passage: string | null
+  source_material: string | null
+  section: chem_phys | cars | bio_biochem | psych_soc | null
+  format: discrete | passage | null
+  difficulty: 1-5 | null
+  content_category_id: uuid | null
+  topic_id: uuid | null
+  subtopic_id: uuid | null
+  reasoning_skill_ids: uuid[]
+  choices: [{label: A|B|C|D, text: string}]
+  her_selected_answer: string | null
+  correct_answer: string | null
+  her_confidence: 1-5 | null
+  time_spent_seconds: number | null
+  notes: string | null
+  parser_confidence: 0-1
+  needs_review: true
+  warnings: string[]
+guardrails:
+  - Use only IDs supplied in taxonomyNodes and reasoningSkills.
+  - Do not invent missing answer choice text.
+  - The output is a draft only and must be reviewed before saving.
+  - Never claim the parsed taxonomy is certain unless the copied text clearly supports it.
